@@ -1,58 +1,83 @@
-# app.py
 import streamlit as st
 import requests
 import pandas as pd
 import numpy as np
 from typing import Dict, Any
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Конфигурация страницы
 st.set_page_config(
-    page_title="Предсказание недвижимости",
+    page_title="RealEstatePredictor | Анализ недвижимости",
     page_icon="🏠",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
+
+# CSS стили
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 3rem !important;
+        color: #1f77b4 !important;
+        text-align: center;
+
+    }
+    .sub-header {
+        font-size: 1.2rem !important;
+        color: #666 !important;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        color: white;
+        text-align: center;
+    }
+    .parameter-card {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 10px;
+        border-left: 4px solid #1f77b4;
+        margin-bottom: 1rem;
+    }
+    .input-section {
+        background-color: #f0f2f6;
+        padding: 2rem;
+        border-radius: 15px;
+        margin-bottom: 2rem;
+    }
+    .stButton>button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: bold;
+        border: none;
+        padding: 1rem;
+        border-radius: 10px;
+        font-size: 1.1rem;
+    }
+    .stButton>button:hover {
+        background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Заголовок приложения
 st.markdown("""
-<div style="text-align: center; padding: 20px;">
-    <h1 style="color: #1976d2;">🔮 Предсказание параметров недвижимости</h1>
-    <p><b>Машинное обучение для анализа рынка недвижимости</b></p>
+<div class="main-header">
+    🏠 RealEstatePredictor
+</div>
+<div class="sub-header">
+    Интеллектуальный анализ рынка недвижимости с использованием машинного обучения
 </div>
 """, unsafe_allow_html=True)
 
-# Создание боковой панели для ввода параметров
-st.sidebar.header("Ввод параметров недвижимости")
-
-# Основные параметры
-st.sidebar.subheader("Основные характеристики")
-size = st.sidebar.number_input("Площадь (м²)", min_value=10, max_value=1000, value=80, step=1)
-room_count = st.sidebar.selectbox("Количество комнат", [1, 2, 3, 4, 5, 6], index=1)
-building_age_numeric = st.sidebar.slider("Возраст здания (лет)", 0, 50, 5)
-
-# Расположение
-st.sidebar.subheader("Расположение")
-floor_no = st.sidebar.number_input("Этаж", min_value=-2, max_value=50, value=3, step=1)
-total_floor_count = st.sidebar.number_input("Этажность здания", min_value=1, max_value=50, value=5, step=1)
-
-# Дополнительные параметры
-st.sidebar.subheader("Дополнительные параметры")
-days_on_market = st.sidebar.slider("Дней на рынке", 0, 365, 30)
-heating_type = st.sidebar.selectbox(
-    "Тип отопления",
-    options=[
-        ("Нет", 0), ("Соба (Уголь)", 1), ("Соба (Газ)", 2),
-        ("Калорифер (Уголь)", 3), ("Калорифер (Газ)", 4),
-        ("Калорифер (Топливо)", 5), ("Комби (Газ)", 6),
-        ("Комби (Электричество)", 7), ("Кат Калорифер", 8),
-        ("Центральная система", 9), ("Центральная система (Измеритель тепла)", 10),
-        ("Теплый пол", 11), ("Кондиционер", 12), ("Фанкойл", 13),
-        ("Солнечная энергия", 14), ("Геотермальная", 15)
-    ],
-    format_func=lambda x: x[0]
-)[1]
-
-# URL API (можно изменить при необходимости)
+# URL API
 API_URL = "http://localhost:8000"
+
 
 # Функция для получения предсказаний от API
 def get_predictions(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,21 +86,72 @@ def get_predictions(data: Dict[str, Any]) -> Dict[str, Any]:
         if response.status_code == 200:
             return response.json()
         else:
-            st.error(f"Ошибка API: {response.status_code} - {response.text}")
-            return None
+            return {"error": f"Ошибка API: {response.status_code}"}
     except requests.exceptions.ConnectionError:
-        st.error("❌ Не удалось подключиться к API. Убедитесь, что сервер запущен.")
-        return None
+        return {"error": "Не удалось подключиться к API. Убедитесь, что сервер запущен."}
     except requests.exceptions.Timeout:
-        st.error("⏰ Превышено время ожидания ответа от API.")
-        return None
+        return {"error": "Превышено время ожидания ответа от API."}
     except Exception as e:
-        st.error(f"❌ Произошла ошибка: {str(e)}")
-        return None
+        return {"error": f"Произошла ошибка: {str(e)}"}
 
 
-# Кнопка для получения предсказаний
-if st.sidebar.button("🔮 Получить предсказания", type="primary"):
+# Секция ввода параметров на главной странице
+st.markdown("### Введите параметры недвижимости")
+
+# Используем колонки для организации ввода
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown("#### 🏢 Основное")
+    size = st.number_input("**Площадь (м²)**", min_value=10, max_value=1000, value=80, step=5,
+                           help="Общая площадь объекта недвижимости")
+    room_count = st.selectbox("**Количество комнат**", [1, 2, 3, 4, 5, 6], index=1,
+                              help="Количество жилых комнат")
+    building_age_numeric = st.slider("**Возраст здания (лет)**", 0, 50, 5,
+                                     help="Сколько лет зданию")
+
+with col2:
+    st.markdown("#### 📍 Расположение")
+    floor_no = st.number_input("**Этаж**", min_value=-2, max_value=50, value=3, step=1,
+                               help="На каком этаже расположен объект")
+    total_floor_count = st.number_input("**Этажность здания**", min_value=1, max_value=50, value=5, step=1,
+                                        help="Общее количество этажей в здании")
+    days_on_market = st.slider("**Дней на рынке**", 0, 3000, 30,  # Изменено с 365 на 3000
+                               help="Сколько дней объект находится в продаже")
+
+with col3:
+    st.markdown("#### ⚙️ Доп. параметры")
+    heating_type = st.selectbox(
+        "**Тип отопления**",
+        options=[
+            ("Нет", 0),
+            ("Печь (Уголь)", 1),
+            ("Печь (Газ)", 2),
+            ("Котел (Уголь)", 3),
+            ("Котел (Газ)", 4),
+            ("Котел (Жидкое топливо)", 5),
+            ("Газовый котел (настенный)", 6),
+            ("Электрический котел", 7),
+            ("Поквартирное отопление", 8),
+            ("Центральная система", 9),
+            ("Центральная система (счетчик тепла)", 10),
+            ("Теплый пол", 11),
+            ("Кондиционер/Обогреватель", 12),
+            ("Фанкойл", 13),
+            ("Солнечная энергия", 14),
+            ("Геотермальная", 15)
+        ],
+        format_func=lambda x: x[0],
+        index=9,
+        help="Тип системы отопления в здании"
+    )[1]
+
+# Кнопка для получения предсказаний по центру
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    predict_button = st.button("Получить прогноз", use_container_width=True)
+
+if predict_button:
     # Подготовка данных для отправки
     input_data = {
         "total_floor_count": total_floor_count,
@@ -84,110 +160,183 @@ if st.sidebar.button("🔮 Получить предсказания", type="pri
         "size": size,
         "building_age_numeric": building_age_numeric,
         "days_on_market": days_on_market,
-        "heating_type": heating_type
+        "heating_type": heating_type,
+        "listing_type": 1,
+        "sub_type": 0
     }
 
+    # Отображение введенных параметров
+    st.markdown("### Введенные параметры")
+
+    # Создаем контейнер для параметров
+    params_container = st.container()
+
+    with params_container:
+        param_cols = st.columns(3)
+
+        # Словарь для сопоставления кодов отопления с русскими названиями
+        heating_types = {
+            0: "Нет",
+            1: "Печь (Уголь)",
+            2: "Печь (Газ)",
+            3: "Котел (Уголь)",
+            4: "Котел (Газ)",
+            5: "Котел (Жидкое топливо)",
+            6: "Газовый котел (настенный)",
+            7: "Электрический котел",
+            8: "Поквартирное отопление",
+            9: "Центральная система",
+            10: "Центральная система (счетчик тепла)",
+            11: "Теплый пол",
+            12: "Кондиционер/Обогреватель",
+            13: "Фанкойл",
+            14: "Солнечная энергия",
+            15: "Геотермальная"
+        }
+
+        params = [
+            ("Площадь", f"{size} м²"),
+            ("Комнаты", room_count),
+            ("Этаж", f"{floor_no}/{total_floor_count}"),
+            ("Возраст здания", f"{building_age_numeric} лет"),
+            ("Дней на рынке", days_on_market),
+            ("Тип отопления", heating_types.get(heating_type, "Неизвестно"))
+        ]
+
+        for i, (param_name, param_value) in enumerate(params):
+            with param_cols[i % 3]:
+                st.markdown(f"**{param_name}:** {param_value}")
+
     # Отправка запроса к API
-    with st.spinner("Анализируем данные..."):
+    with st.spinner("Анализируем данные с помощью ML моделей..."):
         predictions = get_predictions(input_data)
 
     if predictions:
-        # Отображение результатов
-        st.success("✅ Предсказания получены!")
+        if "error" in predictions:
+            st.error(f"❌ {predictions['error']}")
+        else:
+            # Основные результаты
+            st.markdown("---")
+            st.markdown("### Результаты анализа")
 
-        # Создание двух колонок для отображения результатов
-        col1, col2 = st.columns(2)
+            # Метрики в карточках
+            col1, col2 = st.columns(2)
 
-        with col1:
-            st.subheader("💰 Предсказанная цена")
-            price = predictions.get("predicted_price", 0)
-            st.metric(
-                label="Цена недвижимости",
-                value=f"{price:,.0f} ₺",
-                delta=None
+            with col1:
+                price = predictions.get("predicted_price", 0)
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h3>💰 Предсказанная цена</h3>
+                    <h2>{price:,.0f} ₺</h2>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col2:
+                subtype = predictions.get("predicted_subtype", -1)
+                subtype_mapping = {
+                    0: "Квартира", 1: "Жилой комплекс", 2: "Вилла",
+                    3: "Индивидуальный дом", 4: "Кооператив", 5: "Комплекс зданий",
+                    6: "Дача", 7: "Сборный дом", 8: "Особняк/Дворец",
+                    9: "Фермерский дом", 10: "Водная квартира", 11: "Лофт"
+                }
+                subtype_name = subtype_mapping.get(subtype, "Неизвестно")
+                st.markdown(f"""
+                <div class="metric-card" 
+                style="background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);">
+                    <h3>🏷 Тип недвижимости</h3>
+                    <h4>{subtype_name}</h4>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Визуализация
+            st.markdown("---")
+            st.markdown("### Визуализация параметров")
+
+            # График параметров
+            fig = make_subplots(rows=1, cols=2, specs=[[{'type': 'bar'}, {'type': 'pie'}]])
+
+            # Bar chart
+            param_names = ['Площадь', 'Комнаты', 'Этаж', 'Возраст']
+            param_values = [size, room_count, floor_no, building_age_numeric]
+
+            fig.add_trace(
+                go.Bar(x=param_names, y=param_values, name="Параметры", marker_color='#1f77b4'),
+                row=1, col=1
             )
 
-            # Дополнительная информация о цене
-            price_per_sqm = price / size if size > 0 else 0
-            st.info(f"Цена за м²: {price_per_sqm:,.0f} ₺")
+            # Pie chart для распределения
+            pie_labels = ['Площадь', 'Комнаты', 'Расположение', 'Возраст']
+            pie_values = [40, 25, 20, 15]
 
-        with col2:
-            st.subheader("🏷 Тип недвижимости")
-            subtype = predictions.get("predicted_subtype", "Неизвестно")
-            subtype_mapping = {
-                0: "Квартира (Flat)",
-                1: "Жилой комплекс (Rezidans)",
-                2: "Вилла (Villa)",
-                3: "Индивидуальный дом (Müstakil Ev)",
-                4: "Кооператив (Kooperatif)",
-                5: "Комплекс зданий (Komple Bina)",
-                6: "Дача (Yazlık)",
-                7: "Сборный дом (Prefabrik Ev)",
-                8: "Особняк/Дворец/Водный дом (Köşk / Konak / Yalı)",
-                9: "Фермерский дом (Çiftlik Evi)",
-                10: "Водная квартира (Yalı Dairesi)",
-                11: "Лофт (Loft)"
-            }
-            subtype_name = subtype_mapping.get(subtype, f"Тип {subtype}")
-            st.metric(
-                label="Классификация",
-                value=subtype_name,
-                delta=None
+            fig.add_trace(
+                go.Pie(labels=pie_labels, values=pie_values, name=""),
+                row=1, col=2
             )
 
-        # Дополнительная информация
-        st.subheader("📊 Детали анализа")
-        col3, col4 = st.columns(2)
+            fig.update_layout(height=400, showlegend=False, title_text="Анализ параметров объекта")
+            st.plotly_chart(fig, use_container_width=True)
 
-        with col3:
-            st.write("**Введенные параметры:**")
-            st.json(input_data)
-
-        with col4:
-            st.write("**Предсказания модели:**")
-            st.json(predictions)
-
-        # Визуализация
-        st.subheader("📈 Визуализация")
-        chart_data = pd.DataFrame({
-            'Параметр': ['Площадь', 'Комнаты', 'Этаж', 'Возраст'],
-            'Значение': [size, room_count, floor_no, building_age_numeric]
-        })
-        st.bar_chart(chart_data.set_index('Параметр'))
-
-    else:
-        st.error("Не удалось получить предсказания. Проверьте подключение к API.")
+            # Детальная информация
+            with st.expander("Детальная информация о прогнозе"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("**Исходные данные:**")
+                    st.json(input_data)
+                with col2:
+                    st.write("**Результаты модели:**")
+                    st.json({k: v for k, v in predictions.items() if
+                             k not in ['regressor_features_count', 'classifier_features_count']})
 
 else:
-    # Информационная панель
-    st.info("ℹ️ Введите параметры недвижимости в боковой панели и нажмите кнопку 'Получить предсказания'")
+    # Информационная панель когда кнопка еще не нажата
+    st.markdown("---")
+    col1, col2 = st.columns([2, 1])
 
-    # Пример данных
-    st.subheader("📝 Пример заполнения")
-    st.markdown("""
-    - **Площадь**: 85 м²
-    - **Комнаты**: 3 (2+1)
-    - **Этаж**: 3 из 5
-    - **Возраст здания**: 10 лет
-    - **Дней на рынке**: 45
-    - **Отопление**: Центральное (газ)
-    """)
+    with col1:
+        st.markdown("""
+        <div style="background-color: #e8f4f8; padding: 2rem; border-radius: 15px; color: black;">
+            <h3>Как использовать сервис</h3>
+            <ol>
+                <li><strong>Заполните все параметры</strong> объекта недвижимости выше</li>
+                <li><strong>Нажмите кнопку "Получить прогноз"</strong> для анализа</li>
+                <li><strong>Получите точный прогноз</strong> стоимости и типа недвижимости</li>
+                <li><strong>Анализируйте результаты</strong> с помощью интерактивных графиков</li>
+            </ol>
+        </div>
+        """, unsafe_allow_html=True)
 
-# Информация о моделях
-st.sidebar.markdown("---")
-st.sidebar.subheader("ℹ️ О моделях")
-st.sidebar.markdown("""
-**Модели машинного обучения:**
-- **Регрессия**: StackingRegressor
-- **Классификация**: StackingClassifier
-- **Точность**: Высокая
-""")
+        st.markdown("### Пример оптимальных параметров:")
+        example_cols = st.columns(4)
+        examples = [
+            ("Площадь", "85 м²", ""),
+            ("Комнаты", "3", ""),
+            ("Этаж", "3/5", ""),
+            ("Возраст", "10 лет", "")
+        ]
+
+        for i, (title, value, icon) in enumerate(examples):
+            with example_cols[i]:
+                st.metric(title, value, icon)
+
+    with col2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                   padding: 2rem; border-radius: 15px; color: white;">
+            <h3>⚡ Преимущества</h3>
+            <p>✅ Высокая точность прогнозов</p>
+            <p>✅ Быстрый анализ данных</p>
+            <p>✅ Простой интерфейс</p>
+            <p>✅ Детальная аналитика</p>
+            <p>✅ ML технологии</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # Футер
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; color: #666;">
-    <p><b>Создано для курса "Машинное обучение и большие данные" 📊</b></p>
+<div style="text-align: center; color: #666; padding: 2rem 0;">
+    <p><b>RealEstatePredictor v2.0</b></p>
+    <p>Создано для курса "Машинное обучение и Большие данные"</p>
     <p>Мухитова Азалия, Каспранов Камиль — 22П-2</p>
 </div>
 """, unsafe_allow_html=True)
